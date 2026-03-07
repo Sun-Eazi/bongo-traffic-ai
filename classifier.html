@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BONGO TRAFFIC AI — T01 Classifier</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: #020617;
+            color: #fff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed; inset: 0;
+            background:
+                radial-gradient(ellipse at 0% 0%, rgba(139,92,246,0.2) 0%, transparent 55%),
+                radial-gradient(ellipse at 100% 100%, rgba(0,242,255,0.15) 0%, transparent 55%),
+                linear-gradient(rgba(255,255,255,0.008) 1px, transparent 1px) 0 0 / 50px 50px,
+                linear-gradient(90deg, rgba(255,255,255,0.008) 1px, transparent 1px) 0 0 / 50px 50px;
+            pointer-events: none; z-index: 0;
+        }
+
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        .card {
+            background: rgba(10, 18, 35, 0.85);
+            border: 1px solid rgba(0, 200, 255, 0.1);
+            border-radius: 18px;
+            backdrop-filter: blur(20px);
+            position: relative; z-index: 1;
+        }
+
+        .card-inner {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 12px;
+        }
+
+        .input-field {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(0,200,255,0.15);
+            border-radius: 10px;
+            color: #e2e8f0;
+            padding: 10px 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            width: 100%;
+            transition: border-color 0.2s;
+            outline: none;
+        }
+        .input-field:focus { border-color: rgba(0,200,255,0.5); }
+        .input-field::placeholder { color: #334155; }
+
+        .select-field {
+            background: rgba(10, 18, 35, 0.9);
+            border: 1px solid rgba(0,200,255,0.2);
+            border-radius: 10px;
+            color: #e2e8f0;
+            padding: 10px 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            width: 100%;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .btn-run {
+            background: linear-gradient(135deg, #00c8ff, #0055ff);
+            color: #fff;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: 13px;
+            letter-spacing: 2px;
+            padding: 15px 24px;
+            border-radius: 12px;
+            border: none;
+            cursor: pointer;
+            width: 100%;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+        .btn-run:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 0 30px rgba(0,200,255,0.4);
+        }
+        .btn-run:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #94a3b8;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+        }
+        .btn-secondary:hover { color: #00c8ff; border-color: rgba(0,200,255,0.4); }
+
+        .drop-zone {
+            border: 2px dashed rgba(0,200,255,0.25);
+            border-radius: 14px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: rgba(0,200,255,0.02);
+        }
+        .drop-zone:hover, .drop-zone.active {
+            border-color: rgba(0,200,255,0.6);
+            background: rgba(0,200,255,0.06);
+        }
+
+        .status-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .status-dot {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+        }
+        .status-active { background: rgba(34,197,94,0.12); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
+        .status-idle { background: rgba(100,116,139,0.1); color: #64748b; border: 1px solid rgba(100,116,139,0.2); }
+        .status-error { background: rgba(239,68,68,0.12); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
+        .status-waiting { background: rgba(249,115,22,0.12); color: #fb923c; border: 1px solid rgba(249,115,22,0.3); }
+
+        .result-card {
+            background: rgba(10, 18, 35, 0.9);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 14px;
+            overflow: hidden;
+            transition: transform 0.2s, border-color 0.2s;
+            animation: fadeSlideIn 0.4s ease forwards;
+        }
+        .result-card:hover { transform: translateY(-2px); border-color: rgba(0,200,255,0.25); }
+
+        @keyframes fadeSlideIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .spinner {
+            animation: spin 0.8s linear infinite;
+            border-radius: 50%;
+            border: 3px solid rgba(0,200,255,0.15);
+            border-top-color: #00c8ff;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.2); }
+        }
+
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,200,255,0.2); border-radius: 4px; }
+
+        .filename-chip {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 6px 12px;
+            border-radius: 8px;
+            background: rgba(0,200,255,0.08);
+            border: 1px solid rgba(0,200,255,0.2);
+            color: #67e8f9;
+            word-break: break-all;
+        }
+
+        .queue-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 12px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.05);
+            margin-bottom: 6px;
+        }
+
+        .label-sm {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #475569;
+            margin-bottom: 4px;
+        }
+
+        @keyframes scanLine {
+            0% { top: 0; }
+            100% { top: 100%; }
+        }
+        .scan-animation::after {
+            content: '';
+            position: absolute;
+            left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #00c8ff, transparent);
+            animation: scanLine 1.5s linear infinite;
+            top: 0;
+        }
+    </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header style="background:rgba(2,6,23,0.95);border-bottom:1px solid rgba(0,200,255,0.1);padding:14px 28px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;">
+    <div style="display:flex;align-items:center;gap:14px;">
+        <a href="index.html" style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:10px;text-decoration:none;color:#94a3b8;font-size:16px;transition:all 0.2s;" title="Back to Home">←</a>
+        <div>
+            <h1 class="mono" style="font-size:13px;font-weight:700;color:#fff;letter-spacing:2px;">AI CLASSIFIER <span style="color:#00c8ff;">MODULE_V3</span></h1>
+            <p class="mono" style="font-size:9px;color:#475569;letter-spacing:1px;">GEMINI DIRECT · T01 · UAUT HACKATHON 2026</p>
+        </div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;">
+        <div id="geminiStatusBadge" class="status-badge status-idle">
+            <div class="status-dot" style="background:#64748b;"></div>
+            <span>GEMINI_IDLE</span>
+        </div>
+        <div id="supaStatusBadge" class="status-badge status-idle">
+            <div class="status-dot" style="background:#64748b;"></div>
+            <span>DB_IDLE</span>
+        </div>
+    </div>
+</header>
+
+<!-- MAIN LAYOUT -->
+<main style="max-width:1400px;margin:0 auto;padding:28px;display:grid;grid-template-columns:360px 1fr;gap:24px;min-height:calc(100vh - 70px);">
+
+    <!-- LEFT PANEL -->
+    <div style="display:flex;flex-direction:column;gap:18px;">
+
+        <!-- GEMINI KEY -->
+        <div class="card" style="padding:20px;">
+            <p class="label-sm" style="margin-bottom:10px;">🔑 Gemini API Key</p>
+            <input type="password" id="geminiKey" class="input-field" placeholder="AIza..." oninput="onGeminiKeyChange()">
+            <p style="font-size:10px;color:#334155;margin-top:8px;">
+                Pata bure: <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#00c8ff;">aistudio.google.com</a>
+            </p>
+        </div>
+
+        <!-- TEAM CONFIG -->
+        <div class="card" style="padding:20px;">
+            <p class="label-sm" style="margin-bottom:12px;">⚙️ Team Configuration</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+                <div>
+                    <p class="label-sm">Team No.</p>
+                    <input type="text" id="teamNo" class="input-field" value="T01" placeholder="T01">
+                </div>
+                <div>
+                    <p class="label-sm">Location</p>
+                    <select id="location" class="select-field">
+                        <option value="mbezi">Mbezi</option>
+                        <option value="buguruni">Buguruni</option>
+                        <option value="makumbusho">Makumbusho</option>
+                        <option value="kariakoo">Kariakoo</option>
+                        <option value="kimara">Kimara</option>
+                        <option value="mwenge">Mwenge</option>
+                        <option value="ubungo">Ubungo</option>
+                        <option value="temeke">Temeke</option>
+                        <option value="dsm">DSM</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card-inner" style="padding:12px;margin-top:8px;">
+                <p class="label-sm" style="margin-bottom:4px;">Filename Preview</p>
+                <p class="mono" id="filenamePreview" style="font-size:11px;color:#00c8ff;">T01_daladala_mbezi_001</p>
+            </div>
+        </div>
+
+        <!-- UPLOAD -->
+        <div class="card" style="padding:20px;">
+            <p class="label-sm" style="margin-bottom:12px;">📤 Upload Images</p>
+            <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileIn').click()">
+                <div style="font-size:32px;margin-bottom:10px;">🖼️</div>
+                <p class="mono" style="font-size:11px;color:#00c8ff;font-weight:700;letter-spacing:1px;">CLICK TO UPLOAD</p>
+                <p style="font-size:11px;color:#334155;margin-top:4px;">PNG · JPG · WEBP — drag & drop too</p>
+                <input type="file" id="fileIn" multiple accept="image/*" style="display:none" onchange="handleFiles([...this.files])">
+            </div>
+
+            <div id="queueBox" style="display:none;margin-top:16px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <p class="label-sm">Queue (<span id="queueCount">0</span> files)</p>
+                    <button class="btn-secondary" onclick="clearQueue()">CLEAR</button>
+                </div>
+                <div id="queueList" style="max-height:180px;overflow-y:auto;"></div>
+            </div>
+        </div>
+
+        <!-- RUN BUTTON -->
+        <button class="btn-run" id="btnRun" disabled onclick="processAll()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:16px;height:16px;"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            CLASSIFY ALL IMAGES
+        </button>
+
+        <!-- STATS -->
+        <div class="card" style="padding:20px;">
+            <p class="label-sm" style="margin-bottom:12px;">📊 Session Stats</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div class="card-inner" style="padding:14px;text-align:center;">
+                    <p id="statTotal" class="mono" style="font-size:28px;font-weight:700;color:#fff;line-height:1;">0</p>
+                    <p class="label-sm" style="margin-top:6px;margin-bottom:0;">Total</p>
+                </div>
+                <div class="card-inner" style="padding:14px;text-align:center;">
+                    <p id="statBajaj" class="mono" style="font-size:28px;font-weight:700;color:#00c8ff;line-height:1;">0</p>
+                    <p class="label-sm" style="margin-top:6px;margin-bottom:0;color:#0099bb;">Bajaj</p>
+                </div>
+                <div class="card-inner" style="padding:14px;text-align:center;">
+                    <p id="statDaladala" class="mono" style="font-size:28px;font-weight:700;color:#4ade80;line-height:1;">0</p>
+                    <p class="label-sm" style="margin-top:6px;margin-bottom:0;color:#166534;">Daladala</p>
+                </div>
+                <div class="card-inner" style="padding:14px;text-align:center;">
+                    <p id="statBodaboda" class="mono" style="font-size:28px;font-weight:700;color:#fb923c;line-height:1;">0</p>
+                    <p class="label-sm" style="margin-top:6px;margin-bottom:0;color:#9a3412;">Bodaboda</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- EXPORT -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <button class="btn-secondary" onclick="exportCSV()" style="padding:12px;">⬇ CSV</button>
+            <button class="btn-secondary" onclick="exportJSON()" style="padding:12px;">⬇ JSON</button>
+        </div>
+
+    </div>
+
+    <!-- RIGHT PANEL — RESULTS -->
+    <div class="card" style="padding:0;display:flex;flex-direction:column;overflow:hidden;">
+        <div style="padding:16px 24px;border-bottom:1px solid rgba(0,200,255,0.08);display:flex;justify-content:space-between;align-items:center;">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <div class="status-dot pulse" id="engineDot" style="width:10px;height:10px;background:#1e3a5f;"></div>
+                <span class="mono" style="font-size:11px;color:#94a3b8;letter-spacing:2px;text-transform:uppercase;">Neural Analysis Console</span>
+            </div>
+            <div id="processingStatus" class="mono" style="font-size:10px;color:#334155;"></div>
+        </div>
+
+        <div id="resultsGrid" style="flex:1;overflow-y:auto;padding:20px;display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));align-content:start;">
+            <!-- EMPTY STATE -->
+            <div id="emptyState" style="grid-column:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center;">
+                <div style="width:90px;height:90px;background:rgba(0,200,255,0.04);border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:20px;border:2px solid rgba(0,200,255,0.08);">
+                    <span style="font-size:36px;">🚌</span>
+                </div>
+                <p class="mono" style="font-size:14px;color:#1e3a5f;letter-spacing:3px;text-transform:uppercase;">ENGINE IDLE</p>
+                <p style="font-size:12px;color:#1e293b;margin-top:10px;max-width:280px;line-height:1.7;">Weka Gemini API key, chagua eneo, pakia picha, kisha bonyeza CLASSIFY</p>
+            </div>
+        </div>
+    </div>
+
+</main>
+
+<!-- LOG CONSOLE -->
+<div style="position:fixed;bottom:20px;right:20px;width:360px;max-height:200px;overflow-y:auto;background:rgba(2,6,23,0.97);border:1px solid rgba(0,200,255,0.15);border-radius:14px;padding:12px 16px;z-index:200;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <p class="mono" style="font-size:9px;color:#00c8ff;letter-spacing:2px;text-transform:uppercase;">System Log</p>
+        <button class="btn-secondary" style="padding:3px 8px;font-size:9px;" onclick="clearLog()">CLEAR</button>
+    </div>
+    <div id="logBox" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#475569;line-height:1.8;"></div>
+</div>
+
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script>
+// =============================================
+// BONGO TRAFFIC AI — T01 CLASSIFIER
+// Direct Gemini API · No backend needed
+// =============================================
+
+// --- SUPABASE ---
+const SUPA_URL = 'https://ethidsvtdufsvzdxbdtk.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV0aGlkc3Z0ZHVmc3Z6ZHhiZHRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU5MzAyNjYsImV4cCI6MjA2MTUwNjI2Nn0.J6FLFWhlJ-NyJh9MTl_KBOcmBJHJU9y-x4SqGEhFBUc';
+let db = null;
+
+function initDB() {
+    try {
+        db = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+        setBadge('supaStatusBadge', 'active', 'DB_LIVE');
+        log('✅ Supabase connected');
+    } catch(e) {
+        log('⚠️ Supabase init failed: ' + e.message);
+    }
+}
+setTimeout(initDB, 500);
+
+// --- STATE ---
+let API_KEY = '';
+let queue = [];
+let results = [];
+let stats = { total: 0, Bajaj: 0, Daladala: 0, Bodaboda: 0, Unknown: 0 };
+let isProcessing = false;
+let classCounters = { Bajaj: 0, Daladala: 0, Bodaboda: 0, Unknown: 0 };
+
+// --- LOGGING ---
+function log(msg) {
+    const box = document.getElementById('logBox');
+    const time = new Date().toLocaleTimeString('sw-TZ', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    box.innerHTML += `<div><span style="color:#334155;">[${time}]</span> ${msg}</div>`;
+    box.scrollTop = box.scrollHeight;
+}
+function clearLog() { document.getElementById('logBox').innerHTML = ''; }
+
+// --- BADGES ---
+function setBadge(id, state, text) {
+    const el = document.getElementById(id);
+    el.className = 'status-badge status-' + state;
+    const dot = el.querySelector('.status-dot');
+    const colors = { active: '#22c55e', idle: '#64748b', error: '#ef4444', waiting: '#f97316' };
+    dot.style.background = colors[state] || '#64748b';
+    el.querySelector('span').textContent = text;
+}
+
+// --- GEMINI KEY ---
+function onGeminiKeyChange() {
+    API_KEY = document.getElementById('geminiKey').value.trim();
+    if (API_KEY && API_KEY.startsWith('AIza')) {
+        setBadge('geminiStatusBadge', 'active', 'GEMINI_READY');
+        log('🔑 Gemini API key set');
+    } else if (API_KEY) {
+        setBadge('geminiStatusBadge', 'waiting', 'KEY_INVALID?');
+    } else {
+        setBadge('geminiStatusBadge', 'idle', 'GEMINI_IDLE');
+    }
+    updatePreview();
+}
+
+// --- FILENAME PREVIEW ---
+function updatePreview() {
+    const team = document.getElementById('teamNo').value.trim() || 'T01';
+    const loc = document.getElementById('location').value;
+    document.getElementById('filenamePreview').textContent = `${team}_daladala_${loc}_001`;
+}
+document.getElementById('teamNo').addEventListener('input', updatePreview);
+document.getElementById('location').addEventListener('change', updatePreview);
+updatePreview();
+
+// --- FILE UPLOAD ---
+const dropZone = document.getElementById('dropZone');
+dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('active'); };
+dropZone.ondragleave = () => dropZone.classList.remove('active');
+dropZone.ondrop = (e) => { e.preventDefault(); dropZone.classList.remove('active'); handleFiles([...e.dataTransfer.files]); };
+
+function handleFiles(files) {
+    const valid = files.filter(f => f.type.startsWith('image/'));
+    if (!valid.length) return;
+    valid.forEach(f => {
+        queue.push({ id: Date.now() + Math.random(), file: f, status: 'pending', url: URL.createObjectURL(f) });
+    });
+    document.getElementById('queueBox').style.display = 'block';
+    document.getElementById('btnRun').disabled = false;
+    renderQueue();
+    log(`📁 ${valid.length} picha zimeongezwa kwa queue`);
+}
+
+function renderQueue() {
+    document.getElementById('queueCount').textContent = queue.length;
+    document.getElementById('queueList').innerHTML = queue.map(i => `
+        <div class="queue-item">
+            <img src="${i.url}" style="width:34px;height:34px;border-radius:6px;object-fit:cover;flex-shrink:0;">
+            <p class="mono" style="font-size:10px;color:#94a3b8;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${i.file.name}</p>
+            <span style="font-size:9px;padding:3px 8px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-weight:700;
+                ${i.status==='done' ? 'background:rgba(34,197,94,0.15);color:#4ade80;' :
+                  i.status==='error' ? 'background:rgba(239,68,68,0.15);color:#f87171;' :
+                  i.status==='scanning' ? 'background:rgba(0,200,255,0.15);color:#00c8ff;' :
+                  'background:rgba(100,116,139,0.1);color:#64748b;'}">${i.status}</span>
+        </div>
+    `).join('');
+}
+
+function clearQueue() {
+    queue = []; results = []; stats = { total:0, Bajaj:0, Daladala:0, Bodaboda:0, Unknown:0 };
+    classCounters = { Bajaj:0, Daladala:0, Bodaboda:0, Unknown:0 };
+    document.getElementById('queueBox').style.display = 'none';
+    document.getElementById('btnRun').disabled = true;
+    document.getElementById('resultsGrid').innerHTML = '<div id="emptyState" style="grid-column:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center;"><span style="font-size:36px;margin-bottom:16px;">🚌</span><p class="mono" style="font-size:14px;color:#1e3a5f;letter-spacing:3px;">ENGINE IDLE</p></div>';
+    updateStats();
+}
+
+// =============================================
+// MAIN PROCESS FUNCTION
+// =============================================
+async function processAll() {
+    if (isProcessing) return;
+    API_KEY = document.getElementById('geminiKey').value.trim();
+    if (!API_KEY) { alert('Weka Gemini API key kwanza!'); return; }
+
+    isProcessing = true;
+    const btnRun = document.getElementById('btnRun');
+    btnRun.disabled = true;
+    btnRun.innerHTML = '<div class="spinner" style="width:16px;height:16px;"></div> INAFANYA KAZI...';
+
+    document.getElementById('engineDot').style.background = '#00c8ff';
+    document.getElementById('emptyState')?.remove();
+
+    const team = document.getElementById('teamNo').value.trim() || 'T01';
+    const loc = document.getElementById('location').value || 'dsm';
+
+    const pending = queue.filter(i => i.status !== 'done');
+    log(`🚀 Kuanza classify ${pending.length} picha...`);
+
+    for (let i = 0; i < pending.length; i++) {
+        const item = pending[i];
+        item.status = 'scanning';
+        renderQueue();
+        document.getElementById('processingStatus').textContent = `${i+1}/${pending.length}`;
+
+        const cardId = 'card-' + item.id.toString().replace('.','');
+        const placeholder = document.createElement('div');
+        placeholder.id = cardId;
+        placeholder.className = 'result-card scan-animation';
+        placeholder.style.position = 'relative';
+        placeholder.innerHTML = `
+            <div style="height:170px;background:#0a1223;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;position:relative;overflow:hidden;">
+                <img src="${item.url}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.1;">
+                <div class="spinner" style="width:32px;height:32px;position:relative;z-index:1;"></div>
+                <p class="mono" style="font-size:10px;color:#00c8ff;letter-spacing:2px;position:relative;z-index:1;">SCANNING...</p>
+                <p class="mono" style="font-size:9px;color:#334155;position:relative;z-index:1;">${item.file.name}</p>
+            </div>`;
+        document.getElementById('resultsGrid').insertAdjacentElement('afterbegin', placeholder);
+
+        try {
+            log(`🔍 Analyzing: ${item.file.name}`);
+            const analysis = await classifyWithRetry(item.file);
+            
+            item.status = 'done';
+            const cls = analysis.class || 'Unknown';
+            const color = (analysis.primary_color || 'unknown').toLowerCase().replace(/\s+/g,'-');
+            
+            classCounters[cls] = (classCounters[cls] || 0) + 1;
+            stats.total++;
+            stats[cls] = (stats[cls] || 0) + 1;
+
+            // ✅ CORRECT NAMING FORMAT: T01_daladala_mbezi_001
+            const num = String(classCounters[cls]).padStart(3, '0');
+            const newName = `${team}_${cls.toLowerCase()}_${loc}_${num}`;
+            
+            log(`✅ ${item.file.name} → ${newName} (${analysis.confidence}%)`);
+
+            // Save to DB
+            if (db) {
+                db.from('vehicle_logs').insert([{
+                    team,
+                    location: loc,
+                    class: cls,
+                    color: analysis.primary_color || 'Unknown',
+                    confidence: analysis.confidence,
+                    filename: item.file.name,
+                    new_filename: newName
+                }]).then(({error}) => {
+                    if (error) log('⚠️ DB: ' + error.message);
+                    else log('💾 Saved to database');
+                });
+            }
+
+            updateStats();
+
+            const colors = {
+                Bajaj: { badge: 'rgba(0,200,255,0.2)', text: '#00c8ff', border: 'rgba(0,200,255,0.4)', bar: '#00c8ff' },
+                Daladala: { badge: 'rgba(34,197,94,0.2)', text: '#4ade80', border: 'rgba(34,197,94,0.4)', bar: '#4ade80' },
+                Bodaboda: { badge: 'rgba(249,115,22,0.2)', text: '#fb923c', border: 'rgba(249,115,22,0.4)', bar: '#fb923c' },
+                Unknown: { badge: 'rgba(100,116,139,0.2)', text: '#94a3b8', border: 'rgba(100,116,139,0.3)', bar: '#94a3b8' },
+            };
+            const c = colors[cls] || colors.Unknown;
+
+            document.getElementById(cardId).className = 'result-card';
+            document.getElementById(cardId).innerHTML = `
+                <div style="position:relative;height:170px;overflow:hidden;">
+                    <img src="${item.url}" style="width:100%;height:100%;object-fit:cover;transition:transform 0.4s;" onmouseover="this.style.transform='scale(1.06)'" onmouseout="this.style.transform='scale(1)'">
+                    <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(2,6,23,0.95) 0%,transparent 60%);"></div>
+                    <div style="position:absolute;top:10px;left:10px;right:10px;display:flex;justify-content:space-between;align-items:flex-start;">
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;background:${c.badge};color:${c.text};border:1px solid ${c.border};text-transform:uppercase;">${cls}</span>
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;background:rgba(0,0,0,0.7);color:#e2e8f0;border:1px solid rgba(255,255,255,0.1);">${analysis.confidence}%</span>
+                    </div>
+                    <div style="position:absolute;bottom:10px;left:12px;right:12px;">
+                        <div style="height:2px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;">
+                            <div style="height:100%;background:${c.bar};width:${analysis.confidence}%;transition:width 1s ease;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div style="padding:14px;">
+                    <p class="label-sm">New Filename</p>
+                    <div class="filename-chip">${newName}</div>
+                    
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
+                        <div>
+                            <p class="label-sm">Original</p>
+                            <p style="font-size:10px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${item.file.name}</p>
+                        </div>
+                        <div>
+                            <p class="label-sm">Color</p>
+                            <p style="font-size:11px;color:#94a3b8;">${analysis.primary_color || 'Unknown'}</p>
+                        </div>
+                    </div>
+
+                    <div style="margin-top:12px;padding:10px;background:rgba(0,0,0,0.3);border-radius:8px;border-left:3px solid ${c.bar};">
+                        <p style="font-size:10px;color:#64748b;font-style:italic;line-height:1.6;">${analysis.reasoning || 'No reasoning provided'}</p>
+                    </div>
+
+                    <div style="margin-top:10px;display:flex;justify-content:flex-end;">
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;padding:3px 8px;border-radius:6px;background:rgba(0,200,255,0.08);color:#00c8ff;border:1px solid rgba(0,200,255,0.15);">⚡ GEMINI DIRECT</span>
+                    </div>
+                </div>
+            `;
+            results.push({ item, analysis, newName });
+
+        } catch(err) {
+            item.status = 'error';
+            log('❌ Error: ' + err.message);
+            document.getElementById(cardId).className = 'result-card';
+            document.getElementById(cardId).innerHTML = `
+                <div style="padding:30px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;">
+                    <div style="font-size:32px;">⚠️</div>
+                    <p class="mono" style="font-size:11px;font-weight:700;color:#f87171;text-transform:uppercase;letter-spacing:1px;">Analysis Error</p>
+                    <p class="mono" style="font-size:10px;color:#334155;line-height:1.6;">${err.message}</p>
+                    <p style="font-size:10px;color:#1e3a5f;">${item.file.name}</p>
+                </div>
+            `;
+        }
+
+        renderQueue();
+
+        // Rate limit delay between requests (Gemini free tier)
+        if (i < pending.length - 1) {
+            log('⏳ Subiri sekunde 2 (rate limit)...');
+            await sleep(2000);
+        }
+    }
+
+    isProcessing = false;
+    document.getElementById('engineDot').style.background = '#22c55e';
+    document.getElementById('processingStatus').textContent = 'DONE';
+    btnRun.disabled = false;
+    btnRun.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:16px;height:16px;"><polygon points="5 3 19 12 5 21 5 3"/></svg> CLASSIFY AGAIN';
+    log(`🎉 Imekamilika! ${results.length} picha zimeclassified`);
+}
+
+// =============================================
+// GEMINI CLASSIFY WITH RETRY
+// =============================================
+async function classifyWithRetry(file, retries = 3) {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            return await classifyWithGemini(file);
+        } catch(err) {
+            const isQuota = err.message.includes('quota') || err.message.includes('RESOURCE_EXHAUSTED') || err.message.includes('429');
+            if (isQuota && attempt < retries) {
+                const waitSec = attempt * 5;
+                log(`⏳ Quota limit! Subiri sekunde ${waitSec}...`);
+                await sleep(waitSec * 1000);
+            } else if (attempt < retries) {
+                log(`⚠️ Attempt ${attempt} failed, retrying...`);
+                await sleep(2000);
+            } else {
+                throw err;
+            }
+        }
+    }
+}
+
+async function classifyWithGemini(file) {
+    const base64 = await toBase64(file);
+    
+    const prompt = `You are an AI system for classifying vehicles on Dar es Salaam roads, Tanzania.
+
+Analyze this image carefully and identify the PRIMARY vehicle type shown.
+
+VEHICLE CLASSES:
+- Bajaj: Three-wheeled motorized rickshaw/tuk-tuk. Yellow/orange body. Small enclosed cabin for passengers.
+- Daladala: Minibus public transport. Usually Toyota Coaster or similar. Has route numbers. Carries many passengers.
+- Bodaboda: Motorcycle taxi. Rider with passenger or solo. Any motorcycle used as transport.
+- Unknown: If none of the above or image unclear.
+
+Return ONLY valid JSON, nothing else:
+{"class":"Bajaj","primary_color":"Yellow","confidence":92,"reasoning":"Three-wheeled tuk-tuk with yellow body characteristic of Dar es Salaam bajaj"}
+
+Only use these exact class names: Bajaj, Daladala, Bodaboda, Unknown`;
+
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            contents: [{
+                parts: [
+                    { inline_data: { mime_type: file.type || 'image/jpeg', data: base64 } },
+                    { text: prompt }
+                ]
+            }],
+            generationConfig: { temperature: 0.05, maxOutputTokens: 200 }
+        })
+    });
+
+    if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        throw new Error(errData?.error?.message || `HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error.message);
+
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error('Empty response from Gemini');
+
+    const cleaned = text.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+
+    try {
+        const parsed = JSON.parse(cleaned);
+        // Validate class
+        if (!['Bajaj','Daladala','Bodaboda','Unknown'].includes(parsed.class)) {
+            parsed.class = 'Unknown';
+        }
+        parsed.confidence = Math.min(99, Math.max(50, parseInt(parsed.confidence) || 70));
+        return parsed;
+    } catch(e) {
+        const match = cleaned.match(/\{[\s\S]*?\}/);
+        if (match) return JSON.parse(match[0]);
+        throw new Error('Could not parse AI response: ' + cleaned.substring(0, 100));
+    }
+}
+
+function toBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// --- STATS ---
+function updateStats() {
+    document.getElementById('statTotal').textContent = stats.total;
+    document.getElementById('statBajaj').textContent = stats.Bajaj;
+    document.getElementById('statDaladala').textContent = stats.Daladala;
+    document.getElementById('statBodaboda').textContent = stats.Bodaboda;
+}
+
+// --- EXPORTS ---
+function exportCSV() {
+    if (!results.length) { alert('Hakuna matokeo bado.'); return; }
+    let csv = 'Original,NewFilename,Class,Color,Confidence,Reasoning\n';
+    results.forEach(r => {
+        csv += `"${r.item.file.name}","${r.newName}","${r.analysis.class}","${r.analysis.primary_color}",${r.analysis.confidence},"${r.analysis.reasoning}"\n`;
+    });
+    download(csv, 'T01_classifications.csv', 'text/csv');
+    log('⬇ CSV exported');
+}
+
+function exportJSON() {
+    if (!results.length) { alert('Hakuna matokeo bado.'); return; }
+    const out = results.map(r => ({
+        original: r.item.file.name,
+        renamed: r.newName,
+        class: r.analysis.class,
+        color: r.analysis.primary_color,
+        confidence: r.analysis.confidence,
+        reasoning: r.analysis.reasoning
+    }));
+    download(JSON.stringify(out, null, 2), 'T01_classifications.json', 'application/json');
+    log('⬇ JSON exported');
+}
+
+function download(content, name, type) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name; a.click();
+    URL.revokeObjectURL(url);
+}
+
+log('🇹🇿 Bongo Traffic AI — T01 Classifier loaded');
+log('ℹ️ Weka Gemini API key kuanza');
+</script>
+</body>
+</html>
